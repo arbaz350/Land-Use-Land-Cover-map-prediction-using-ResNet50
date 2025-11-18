@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 # Load the model
-model = load_model('lulc_50_epoch.keras')
+model = load_model('https://drive.google.com/file/d/1h_1yv_bgfhCh2SY64GZzWv2pYo31fHpO/view?usp=drive_link')
 
 # Define class labels (replace with your actual classes)
 class_labels = ['AnnualCrop', 'Forest', 'HerbaceousVegetation', 'Highway', 'Industrial',
