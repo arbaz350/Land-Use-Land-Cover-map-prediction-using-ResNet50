@@ -15,7 +15,7 @@ st.write("Upload an image to classify the land cover type using a deep learning 
 # ---------------------------------------------------------
 # MODEL URL — REPLACE WITH YOUR REAL HUGGINGFACE URL
 # ---------------------------------------------------------
-MODEL_URL = "https://huggingface.co/arbajshaikh880/lulc-model/blob/main/lulc_50_epoch.keras"
+MODEL_URL = "https://huggingface.co/arbajshaikh880/lulc-model/resolve/main/lulc_50_epoch.keras"
 MODEL_PATH = "lulc_50_epoch.keras"
 
 
