@@ -1,32 +1,29 @@
 import streamlit as st
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
 import numpy as np
 from PIL import Image
+import rasterio
 import requests
 import os
+from tensorflow.keras.models import load_model
 
 # ---------------------------------------------------------
 # APP TITLE
 # ---------------------------------------------------------
 st.title("🌍 Land Use / Land Cover (LULC) Classification")
-st.write("Upload an image to classify the land cover type using a deep learning model.")
+st.write("Upload a EuroSAT **TIF (13-band)** satellite image to classify land cover type.")
 
 # ---------------------------------------------------------
-# MODEL URL — REPLACE WITH YOUR REAL HUGGINGFACE URL
+# MODEL URL (HuggingFace)
 # ---------------------------------------------------------
 MODEL_URL = "https://huggingface.co/arbajshaikh880/lulc-model/resolve/main/best_eurosat_128.keras"
 MODEL_PATH = "best_eurosat_128.keras"
 
-
 # ---------------------------------------------------------
-# SAFE CHUNK-STREAM DOWNLOAD (FIXES CORRUPTION)
+# DOWNLOAD MODEL IF NOT EXIST
 # ---------------------------------------------------------
 def download_model():
-    """Stream download the model from HuggingFace to avoid corruption."""
     if not os.path.exists(MODEL_PATH):
-        st.warning("Downloading model... This may take 1–3 minutes (250MB). Please wait ⏳")
-
+        st.warning("Downloading model... please wait ⏳")
         try:
             with requests.get(MODEL_URL, stream=True) as r:
                 r.raise_for_status()
@@ -34,65 +31,73 @@ def download_model():
                     for chunk in r.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
-
             st.success("Model downloaded successfully!")
-
         except Exception as e:
             st.error(f"Model download failed: {e}")
             st.stop()
 
-
-# ---------------------------------------------------------
-# DOWNLOAD MODEL IF MISSING
-# ---------------------------------------------------------
 download_model()
-
 
 # ---------------------------------------------------------
 # LOAD MODEL (CACHED)
 # ---------------------------------------------------------
 @st.cache_resource
 def load_lulc_model():
-    try:
-        return load_model(MODEL_PATH)
-    except Exception:
-        st.error("❌ Failed to load model. The file may be corrupted.")
-        st.stop()
-
+    return load_model(MODEL_PATH)
 
 model = load_lulc_model()
 
-
 # ---------------------------------------------------------
-# CLASS LABELS
+# CLASS LABELS (EuroSAT 10 classes)
 # ---------------------------------------------------------
 class_labels = [
-    'AnnualCrop', 'Forest', 'HerbaceousVegetation', 'Highway', 'Industrial',
-    'Pasture', 'PermanentCrop', 'Residential', 'River', 'Sealake'
+    "AnnualCrop", "Forest", "HerbaceousVegetation", "Highway", "Industrial",
+    "Pasture", "PermanentCrop", "Residential", "River", "SeaLake"
 ]
 
+# ---------------------------------------------------------
+# READ & PREPROCESS TIF (13 Bands)
+# ---------------------------------------------------------
+def preprocess_tif(file, target_size=(128, 128)):
+    with rasterio.open(file) as src:
+        img = src.read()  # shape: (13, H, W)
+
+        # Center crop (EuroSAT images vary)
+        h, w = img.shape[1], img.shape[2]
+        crop = min(h, w)
+        start_h = (h - crop) // 2
+        start_w = (w - crop) // 2
+        img = img[:, start_h:start_h + crop, start_w:start_w + crop]
+
+        # Resize each band → (128,128)
+        bands = []
+        for b in img:
+            b_img = Image.fromarray(b.astype(np.uint8))
+            b_img = b_img.resize(target_size)
+            bands.append(np.array(b_img))
+
+        img = np.stack(bands, axis=-1)  # (128,128,13)
+        img = img.astype("float32") / 255.0
+        return np.expand_dims(img, 0)  # (1,128,128,13)
 
 # ---------------------------------------------------------
-# IMAGE UPLOADER
+# UI — FILE UPLOADER
 # ---------------------------------------------------------
-uploaded_file = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Upload a **TIF** satellite image...", type=["tif", "tiff"])
 
 if uploaded_file is not None:
-    img = Image.open(uploaded_file).convert("RGB")
-    st.image(img, caption="Uploaded Image", use_column_width=True)
+    st.success("TIF file uploaded!")
+
+    # Preview using RGB Bands (1,2,3)
+    try:
+        with rasterio.open(uploaded_file) as src:
+            rgb = src.read([1, 2, 3])
+            rgb = np.moveaxis(rgb, 0, -1)
+            st.image(rgb, caption="RGB Preview", use_column_width=True)
+    except:
+        st.warning("No RGB preview available")
 
     # Preprocess
-    img = img.resize((64, 64,13))  # Match model input
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)
-    #img_array = img_array / 255.0
+    img = preprocess_tif(uploaded_file)
 
-    # Prediction
-    predictions = model.predict(img_array)
-    predicted_class = class_labels[np.argmax(predictions)]
-    confidence = float(np.max(predictions) * 100)
-
-    # Display results
-    st.subheader("Prediction Results")
-    st.write(f"**Predicted Class:** {predicted_class}")
-    st.write(f"**Confidence:** {confidence:.2f}%")
+    #
