@@ -82,10 +82,10 @@ if uploaded_file is not None:
     st.image(img, caption="Uploaded Image", use_column_width=True)
 
     # Preprocess
-    img = img.resize((64, 64))  # Match model input
+    img = img.resize((64, 64,13))  # Match model input
     img_array = image.img_to_array(img)
     img_array = np.expand_dims(img_array, axis=0)
-    img_array = img_array / 255.0
+    #img_array = img_array / 255.0
 
     # Prediction
     predictions = model.predict(img_array)
